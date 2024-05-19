@@ -290,10 +290,33 @@ make_passwd_user (CommonUserList *user_list, struct passwd *entry)
 
     g_auto(GStrv) tokens = g_strsplit (entry->pw_gecos, ",", -1);
     gchar *real_name;
-    if (tokens[0] != NULL && tokens[0][0] != '\0')
+    if (tokens[0] != NULL && tokens[0][0] != '\0') {
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+        gchar *p, *t;
+        gchar name[1024];
+
+        for (p = tokens[0], t = name; t < &name[sizeof(name) - 1] && (*t = *p) != '\0'; ++p) {
+            if (*t == '&') {
+                (void)strncpy(t, entry->pw_name,
+                    sizeof(name) - (t - name));
+                name[sizeof(name) - 1] = '\0';
+                if (g_ascii_islower(*t))
+                    *t = g_ascii_toupper(*t);
+                while (t < &name[sizeof(name) - 1] && *++t)
+                    continue;
+            } else {
+                ++t;
+            }
+        }
+        *t = '\0';
+
+        real_name = g_strdup (name);
+#else
         real_name = g_strdup (tokens[0]);
-    else
+#endif
+    } else {
         real_name = g_strdup ("");
+    }
 
     gchar *image = g_build_filename (entry->pw_dir, ".face", NULL);
     if (!g_file_test (image, G_FILE_TEST_EXISTS))
